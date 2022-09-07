@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=stablediffusionforkrita
+X-Python-2-Compatible=false
+Name=Stable Diffusion For Krita
+Comment= Uses ML to generate images.
