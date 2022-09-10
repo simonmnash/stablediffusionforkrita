@@ -9,6 +9,7 @@ import hashlib
 import os
 import torch
 from alteredpipeline import StableDiffusionPipelineAltered
+from img2img import StableDiffusionImg2ImgPipeline
 import uuid
 api_key_header_auth = APIKeyHeader(name='x-api-key')
 
@@ -33,6 +34,7 @@ text_to_image_pipe = StableDiffusionPipelineAltered.from_pretrained("CompVis/sta
                                                     revision='fp16',
                                                     torch_dtype=torch.float16,
                                                     )
+
 class PromptData(BaseModel):
     prompt: str
     width: int

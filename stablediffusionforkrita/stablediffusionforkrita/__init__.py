@@ -3,14 +3,13 @@ from krita import *
 
 from PyQt5.QtWidgets import QDialog, QTextEdit, QPushButton, QHBoxLayout, QWidget, QLabel
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtCore import pyqtSlot, pyqtSignal
+from PyQt5.QtCore import pyqtSlot, pyqtSignal, QByteArray
 from urllib import request, parse
 import json
 from krita import *
 
 HOST = "127.0.0.1"
 PORT = "8000"
-
 #signal_name = pyqtSignal(bool, name='signalName')
 
 def current_selection_pixel_data():
@@ -20,6 +19,10 @@ def current_selection_pixel_data():
     y = current_selection.y()
     w = current_selection.width()
     h = current_selection.height()
+    w = min([w, 512])
+    h = min([h, 512])
+    w = w - (w % 64)
+    h = h - (h % 64)
     pixel_data = d.pixelData(x, y, w , h)
     return x, y, w, h, pixel_data
 
@@ -47,7 +50,7 @@ class StableDiffusionExtension(Extension):
         label.setPixmap(pix_map)
         
         newButton = QPushButton("Generate")
-        newButton.clicked.connect(self.send_request())
+        newButton.clicked.connect(self.send_request)
         newButton.clicked.connect(newDialog.accept)
         layout.addWidget(label)
         layout.addWidget(text_edit)
@@ -60,26 +63,24 @@ class StableDiffusionExtension(Extension):
     def send_request(self, prompt="test"):
         d = Krita.instance().activeDocument()
         x, y, w, h, pixel_data = current_selection_pixel_data()
-
         API_KEY = ''
-        
-        data = json.dumps({'prompt': prompt, 'width': 64, 'height': 64}).encode('utf8')
+
+        data = json.dumps({'prompt': prompt, 'width': w, 'height': h}).encode('utf8')
         req = request.Request("""http://127.0.0.1:8000/prompt_to_image""", data=data)
         req.add_header('x-api-key', API_KEY)
         req.add_header("Content-Type", "application/json")
         contents = request.urlopen(req, timeout=1000000000)
-
+        with open("temporary_file.png", "wb") as f:
+            f.write(contents.read())
         new_paint_layer = d.createNode("TEST", "paintLayer")
-        new_group_layer = d.createNode("TEST", "groupLayer")
-        new_paint_layer.setPixelData(pixel_data, x, y, w, h)
-        new_group_layer.setChildNodes([new_paint_layer])
+        new_file_layer = d.createFileLayer("test", "temporary_file.png", None)
+        new_file_layer.move(x, y)
         root = d.rootNode()
         child_nodes = root.childNodes()
-        root.addChildNode(new_group_layer, child_nodes[0]) 
+        root.addChildNode(new_paint_layer, child_nodes[0]) 
+        root.addChildNode(new_file_layer, child_nodes[0])
+        new_paint_layer.mergeDown()
         d.refreshProjection()
-
-
-
 
 
 Krita.instance().addExtension(StableDiffusionExtension(Krita.instance()))
