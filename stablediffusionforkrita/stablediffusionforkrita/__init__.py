@@ -1,12 +1,13 @@
 from krita import *
-#from stablediffusionforkrita import StableDiffusionExtension
-
 from PyQt5.QtWidgets import QDialog, QTextEdit, QPushButton, QHBoxLayout, QWidget, QLabel
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QByteArray
 from urllib import request, parse
 import json
 from krita import *
+import os
+from PIL import Image
+from io import BytesIO
 
 HOST = "127.0.0.1"
 PORT = "8000"
@@ -49,38 +50,46 @@ class StableDiffusionExtension(Extension):
         label = QLabel()
         label.setPixmap(pix_map)
         
-        newButton = QPushButton("Generate")
-        newButton.clicked.connect(self.send_request)
-        newButton.clicked.connect(newDialog.accept)
+        t2iButton = QPushButton("Text To Image")
+        t2iButton.clicked.connect((lambda x: self.send_request(prompt=text_edit.toPlainText(), endpoint="prompt_to_image")))
+        t2iButton.clicked.connect(newDialog.accept)
+
+        i2iButton = QPushButton("Image To Image")
+        i2iButton.clicked.connect((lambda x: self.send_request(prompt=text_edit.toPlainText(), endpoint="image_to_image")))
+        i2iButton.clicked.connect(newDialog.accept)
+
+
         layout.addWidget(label)
         layout.addWidget(text_edit)
-        layout.addWidget(newButton)
+        layout.addWidget(t2iButton)
 
         newDialog.setWindowTitle("GenerateImage")
         newDialog.setLayout(layout) 
         newDialog.exec_()
 
-    def send_request(self, prompt="test"):
+    def send_request(self, prompt="test", endpoint="prompt_to_image"):
         d = Krita.instance().activeDocument()
         x, y, w, h, pixel_data = current_selection_pixel_data()
         API_KEY = ''
-
         data = json.dumps({'prompt': prompt, 'width': w, 'height': h}).encode('utf8')
-        req = request.Request("""http://127.0.0.1:8000/prompt_to_image""", data=data)
+        if endpoint=="prompt_to_image":
+            req = request.Request("""http://127.0.0.1:8000/prompt_to_image""", data=data)
+        elif endpoint=="image_to_image":
+            req = request.Request("""http://127.0.0.1:8000/image_to_image""", data=data, files=("selection", pixel_data))
         req.add_header('x-api-key', API_KEY)
         req.add_header("Content-Type", "application/json")
         contents = request.urlopen(req, timeout=1000000000)
         with open("temporary_file.png", "wb") as f:
             f.write(contents.read())
+        with Image.open("temporary_file.png") as f:
+            bytearray = QByteArray(f.convert('RGBA').tobytes())
         new_paint_layer = d.createNode("TEST", "paintLayer")
-        new_file_layer = d.createFileLayer("test", "temporary_file.png", None)
-        new_file_layer.move(x, y)
+        new_paint_layer.setPixelData(bytearray, x, y, w, h)
         root = d.rootNode()
         child_nodes = root.childNodes()
-        root.addChildNode(new_paint_layer, child_nodes[0]) 
-        root.addChildNode(new_file_layer, child_nodes[0])
-        new_paint_layer.mergeDown()
+        root.addChildNode(new_paint_layer, child_nodes[-1])
         d.refreshProjection()
+
 
 
 Krita.instance().addExtension(StableDiffusionExtension(Krita.instance()))
